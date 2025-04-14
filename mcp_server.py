@@ -1,69 +1,87 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import Dict, Any, Optional
-import mysql.connector
-from mysql.connector import Error
+import json
+import sys
 import os
-from dotenv import load_dotenv
-from mcp import MCPServer, Tool, Resource
+from typing import Dict, Any
 
-# Load environment variables
-load_dotenv()
-
-app = FastAPI()
-
-# MySQL connection configuration
-mysql_config = {
-    'host': os.getenv('MYSQL_HOST', 'localhost'),
-    'user': os.getenv('MYSQL_USER', 'root'),
-    'password': os.getenv('MYSQL_PASSWORD', ''),
-    'database': os.getenv('MYSQL_DATABASE', '')
-}
-
-# MCP 서버 초기화
-mcp_server = MCPServer(
-    name="MySQL MCP Server",
-    description="MySQL 데이터베이스에 대한 쿼리 실행을 지원하는 MCP 서버",
-    version="1.0.0"
-)
-
-# MySQL 쿼리 도구 정의
-mysql_query_tool = Tool(
-    name="mysql_query",
-    description="Execute MySQL queries",
-    parameters={
-        "query": {
-            "type": "string",
-            "description": "SQL query to execute"
-        }
-    }
-)
-
-# MySQL 리소스 정의
-mysql_resource = Resource(
-    name="mysql",
-    description="MySQL database connection",
-    config=mysql_config
-)
-
-# 도구와 리소스를 서버에 등록
-mcp_server.register_tool(mysql_query_tool)
-mcp_server.register_resource(mysql_resource)
-
-@app.get("/status")
-async def get_status():
-    """Return the server status and available tools"""
-    return mcp_server.get_status()
-
-@app.post("/execute")
-async def execute_tool(tool_name: str, params: Dict[str, Any]):
-    """Execute the requested tool"""
+def handle_request(request: Dict[str, Any]) -> Dict[str, Any]:
+    """Handle MCP requests"""
     try:
-        result = await mcp_server.execute_tool(tool_name, params)
-        return result
+        if request["type"] == "getServerInfo":
+            return {
+                "type": "response",
+                "id": request["id"],
+                "result": {
+                    "name": "Smithery MCP Server",
+                    "version": "1.0.0",
+                    "capabilities": ["mysql_query", "search"],
+                    "mcp_server_type": "mysql" if os.getenv("MCP_SERVER_TYPE") == "mysql" else "perplexity"
+                }
+            }
+        elif request["type"] == "executeTool":
+            tool_name = request["tool"]
+            params = request["params"]
+            
+            if tool_name == "mysql_query":
+                # MySQL 쿼리 실행 로직
+                return {
+                    "type": "response",
+                    "id": request["id"],
+                    "result": {
+                        "success": True,
+                        "data": "MySQL query result"
+                    }
+                }
+            elif tool_name == "search":
+                # Perplexity 검색 로직
+                return {
+                    "type": "response",
+                    "id": request["id"],
+                    "result": {
+                        "success": True,
+                        "data": "Search result"
+                    }
+                }
+            else:
+                return {
+                    "type": "error",
+                    "id": request["id"],
+                    "error": f"Unknown tool: {tool_name}"
+                }
+        else:
+            return {
+                "type": "error",
+                "id": request["id"],
+                "error": f"Unknown request type: {request['type']}"
+            }
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        return {
+            "type": "error",
+            "id": request.get("id", "unknown"),
+            "error": str(e)
+        }
+
+def main():
+    """Main function to handle stdio communication"""
+    while True:
+        try:
+            # Read request from stdin
+            line = sys.stdin.readline()
+            if not line:
+                break
+                
+            request = json.loads(line)
+            response = handle_request(request)
+            
+            # Write response to stdout
+            sys.stdout.write(json.dumps(response) + "\n")
+            sys.stdout.flush()
+            
+        except json.JSONDecodeError:
+            sys.stderr.write("Invalid JSON input\n")
+            sys.stderr.flush()
+        except Exception as e:
+            sys.stderr.write(f"Error: {str(e)}\n")
+            sys.stderr.flush()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000) 
+    main() 
