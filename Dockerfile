@@ -1,18 +1,17 @@
-FROM python:3.9-slim
+FROM python:3.11-alpine
 
+# Install system dependencies
+RUN apk add --no-cache gcc musl-dev linux-headers
+
+# Set working directory
 WORKDIR /app
 
-# 필요한 시스템 패키지 설치
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Python 패키지 설치
+# Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 소스 코드 복사
+# Copy the rest of the application
 COPY . .
 
-# 서버 실행
-CMD ["uvicorn", "mcp_server:app", "--host", "0.0.0.0", "--port", "8000"] 
+# Run the MCP server
+CMD ["python", "mcp_server.py"] 
