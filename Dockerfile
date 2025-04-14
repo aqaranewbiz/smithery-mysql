@@ -1,7 +1,12 @@
-FROM python:3.11-alpine
+FROM python:3.11-slim
 
 # Install system dependencies
-RUN apk add --no-cache gcc musl-dev linux-headers
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    gcc \
+    python3-dev \
+    default-libmysqlclient-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app
@@ -12,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the rest of the application
 COPY . .
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
 
 # Run the MCP server
 CMD ["python", "mcp_server.py"] 
